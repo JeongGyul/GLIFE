@@ -750,7 +750,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 188555e3ec04127419e82a246f400835, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  portName: COM7
+  portName: COM10
   handRoot: {fileID: 96800871}
   fingerJoints:
   - {fileID: 96800866}
@@ -758,9 +758,17 @@ MonoBehaviour:
   - {fileID: 96800868}
   - {fileID: 96800869}
   - {fileID: 96800870}
-  flexMin: 8b0200007702000026020000db0200007a020000
-  flexMax: fa020000500300000a0300004a03000067030000
+  flexMin: 6109000010090000d3070000520a000060090000
+  flexMax: c50c00000e0e0000e40d0000360e0000250e0000
   maxFingerAngle: 90
+  mpuCalibrationOffset: {x: 0, y: 0, z: 0, w: 1}
+  finalRotationCorrection: {x: 0, y: 0, z: 0}
+  fingerRotationAxes:
+  - {x: 0, y: 0, z: 1}
+  - {x: 1, y: 0, z: 0}
+  - {x: 1, y: 0, z: 0}
+  - {x: 1, y: 0, z: 0}
+  - {x: 1, y: 0, z: 0}
 --- !u!114 &1578166435
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -791,7 +799,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1578166432}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7ce95f86585192840baa0e79f9c48879, type: 3}
   m_Name: 
