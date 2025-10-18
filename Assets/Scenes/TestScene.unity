@@ -704,9 +704,61 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2894427558690757125, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2894427558690757125, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2894427558690757125, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.043
+      objectReference: {fileID: 0}
+    - target: {fileID: 5177927096712355015, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.00169
+      objectReference: {fileID: 0}
+    - target: {fileID: 5177927096712355015, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.0001
+      objectReference: {fileID: 0}
+    - target: {fileID: 5177927096712355015, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0.00012
+      objectReference: {fileID: 0}
     - target: {fileID: 5931135184144021081, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
       propertyPath: m_Name
       value: TestBaseLine
+      objectReference: {fileID: 0}
+    - target: {fileID: 7744324333376740874, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7744324333376740874, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7744324333376740874, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7744324333376740874, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7744324333376740874, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7744324333376740874, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7744324333376740874, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects:
@@ -750,7 +802,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 188555e3ec04127419e82a246f400835, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  portName: COM10
+  portName: COM8
   handRoot: {fileID: 96800871}
   fingerJoints:
   - {fileID: 96800866}
@@ -761,14 +813,8 @@ MonoBehaviour:
   flexMin: 6109000010090000d3070000520a000060090000
   flexMax: c50c00000e0e0000e40d0000360e0000250e0000
   maxFingerAngle: 90
-  mpuCalibrationOffset: {x: 0, y: 0, z: 0, w: 1}
-  finalRotationCorrection: {x: 0, y: 0, z: 0}
-  fingerRotationAxes:
-  - {x: 0, y: 0, z: 1}
-  - {x: 1, y: 0, z: 0}
-  - {x: 1, y: 0, z: 0}
-  - {x: 1, y: 0, z: 0}
-  - {x: 1, y: 0, z: 0}
+  calibrationKey: 32
+  rotationSmoothing: 0.3
 --- !u!114 &1578166435
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -815,6 +861,8 @@ MonoBehaviour:
   flexMin: a90200004503000046030000b002000061020000
   flexMax: 25030000de030000dd030000b503000041030000
   maxFingerAngle: 90
+  calibrationKey: 99
+  gyroSmoothing: 0.1
 --- !u!4 &1890948372 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 351318530399474915, guid: 4e437735acb8f5e4a89f936ff50e0e79, type: 3}

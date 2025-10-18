@@ -7,7 +7,7 @@ public class GloveReceiver : MonoBehaviour
 {
     [Header("연결 설정")]
     [Tooltip("장치 관리자에서 확인한 COM 포트 번호")]
-    public string portName = "COM10"; // 사용자가 COM10으로 변경
+    public string portName = "COM8";
 
     [Header("3D 모델 관절 연결")]
     [Tooltip("손목 또는 손바닥에 해당하는 루트 오브젝트")]
@@ -15,7 +15,7 @@ public class GloveReceiver : MonoBehaviour
     [Tooltip("제어할 5개의 손가락 관절 (엄지부터 새끼 순서로)")]
     public Transform[] fingerJoints = new Transform[5];
 
-    [Header("캘리브레이션")]
+    [Header("움직임 캘리브레이션")]
     [Tooltip("각 손가락별로 플렉스 센서가 펴졌을 때의 값 (엄지부터)")]
     public int[] flexMin = new int[5];
     [Tooltip("각 손가락별로 플렉스 센서가 완전히 굽혀졌을 때의 값 (엄지부터)")]
@@ -23,22 +23,13 @@ public class GloveReceiver : MonoBehaviour
     [Tooltip("손가락이 최대로 굽혀질 각도")]
     public float maxFingerAngle = 90.0f;
 
-    [Header("손목 회전 보정")]
-    [Tooltip("MPU-9250이 초기화될 때의 회전값을 보정합니다. (초기 기준점 설정)")]
-    public Quaternion mpuCalibrationOffset = Quaternion.identity;
-    [Tooltip("MPU-9250의 X, Y, Z축을 유니티 모델의 축에 맞추기 위한 최종 조정 (유니티 에디터에서 조절)")]
-    public Vector3 finalRotationCorrection = new Vector3(0, 0, 0);
-
-    [Header("손가락 회전 축 보정")]
-    [Tooltip("각 손가락의 회전 축을 벡터로 설정합니다. (X, Y, Z)")]
-    public Vector3[] fingerRotationAxes = new Vector3[5] {
-        new Vector3(0, 0, 1), // 엄지 (Z축 회전)
-        new Vector3(0, 0, 1), // 검지 (Z축 회전)
-        new Vector3(0, 0, 1), // 중지 (Z축 회전)
-        new Vector3(0, 0, 1), // 약지 (Z축 회전)
-        new Vector3(0, 0, 1)  // 새끼 (Z축 회전)
-    };
-
+    [Header("Quaternion 캘리브레이션")]
+    [Tooltip("스페이스바를 눌러 현재 자세를 중립으로 설정")]
+    public KeyCode calibrationKey = KeyCode.Space;
+    [Tooltip("회전 스무딩 강도 (0~1)")]
+    [Range(0f, 1f)]
+    public float rotationSmoothing = 0.3f;
+    
     // --- 내부 변수들 ---
     private SerialPort serialPort;
     private Thread dataReadThread;
@@ -47,9 +38,9 @@ public class GloveReceiver : MonoBehaviour
     private readonly object lockObject = new object();
 
     private int[] flexVals = new int[5];
-    private float pitch, roll, yaw;
-
-    private Quaternion initialMPURotation = Quaternion.identity;
+    
+    private Quaternion sensorQuat = Quaternion.identity;
+    private Quaternion calibrationOffset = Quaternion.identity; // 캘리브레이션 오프셋
     private bool isCalibrated = false;
 
     void Start()
@@ -59,9 +50,11 @@ public class GloveReceiver : MonoBehaviour
             serialPort = new SerialPort(portName, 115200) { ReadTimeout = 200 };
             serialPort.Open();
             isRunning = true;
-            dataReadThread = new Thread(ReadDataThread) { IsBackground = true };
+            dataReadThread = new Thread(ReadDataThread);
+            dataReadThread.IsBackground = true;
             dataReadThread.Start();
             Debug.Log($"✅ [왼손] Bluetooth-Serial 포트 연결 성공: {portName}");
+            Debug.Log($"💡 [{calibrationKey}] 키를 눌러 Quaternion 캘리브레이션하세요.");
         }
         catch (Exception e)
         {
@@ -71,6 +64,11 @@ public class GloveReceiver : MonoBehaviour
 
     void Update()
     {
+        if (Input.GetKeyDown(calibrationKey))
+        {
+            Calibrate();
+        }
+
         string dataToProcess = null;
         lock (lockObject)
         {
@@ -84,24 +82,9 @@ public class GloveReceiver : MonoBehaviour
         if (dataToProcess != null)
         {
             ParseData(dataToProcess);
-            if (!isCalibrated)
-            {
-                initialMPURotation = Quaternion.Euler(pitch, yaw, roll);
-                isCalibrated = true;
-                Debug.Log($"✨ MPU 초기 캘리브레이션 완료: Pitch={pitch}, Yaw={yaw}, Roll={roll}");
-            }
         }
 
         UpdateHandModel();
-
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            if (isCalibrated)
-            {
-                initialMPURotation = Quaternion.Euler(pitch, yaw, roll);
-                Debug.Log($"✨ 손목 회전 재초기화 완료: Pitch={pitch}, Yaw={yaw}, Roll={roll}");
-            }
-        }
     }
 
     private void ReadDataThread()
@@ -116,7 +99,7 @@ public class GloveReceiver : MonoBehaviour
                     receivedString = line;
                 }
             }
-            catch (TimeoutException) { }
+            catch (TimeoutException) { /* 무시 */ }
             catch (Exception e)
             {
                 if (isRunning) Debug.LogWarning($"⚠ [왼손] 데이터 수신 오류: {e.Message}");
@@ -128,20 +111,21 @@ public class GloveReceiver : MonoBehaviour
     {
         try
         {
+            data = data.TrimStart(',');
             string[] parts = data.Split(',');
-            if (parts.Length >= 11)
+            if (parts.Length >= 12)
             {
                 for (int i = 0; i < 5; i++)
                 {
-                    if (i < parts.Length)
-                    {
-                        flexVals[i] = int.Parse(parts[i]);
-                    }
+                    flexVals[i] = int.Parse(parts[i]);
                 }
 
-                pitch = float.Parse(parts[8]);
-                roll = float.Parse(parts[9]);
-                yaw = float.Parse(parts[10]);
+                float w = float.Parse(parts[8]);
+                float x = float.Parse(parts[9]);
+                float y = float.Parse(parts[10]);
+                float z = float.Parse(parts[11]);
+                
+                sensorQuat = new Quaternion(x, y, -z, -w);
             }
         }
         catch (Exception e)
@@ -150,33 +134,74 @@ public class GloveReceiver : MonoBehaviour
         }
     }
 
+    void Calibrate()
+    {
+        if (handRoot == null) return;
+        
+        // ✨ 핵심 수정: sensorRotationOffset 대신, 현재 손 모델의 실제 회전 값을 기준으로 삼습니다.
+        // "현재 손 모델의 자세(handRoot.rotation)가 현재 센서 값(sensorQuat)의 기준이 되도록 오프셋을 설정하라"
+        calibrationOffset = handRoot.rotation * Quaternion.Inverse(sensorQuat);
+        isCalibrated = true;
+        
+        Debug.Log("✅ [왼손] Quaternion 캘리브레이션 완료! 현재 자세를 기준으로 설정합니다.");
+    }
+
     private void UpdateHandModel()
     {
-        if (!isCalibrated) return;
+        if (handRoot == null) return;
 
-        // 1. 손목 회전 업데이트
-        Quaternion currentMPURotation = Quaternion.Euler(yaw, pitch, roll);
-        Quaternion deltaRotation = currentMPURotation * Quaternion.Inverse(initialMPURotation);
+        Quaternion finalQuat;
 
-        // 최종 보정값 적용
-        Quaternion adjustedRotation = Quaternion.Euler(finalRotationCorrection) * deltaRotation;
-        handRoot.localRotation = adjustedRotation;
+        if (isCalibrated)
+        {
+            // 캘리브레이션 후: 보정된 회전 값 적용
+            finalQuat = calibrationOffset * sensorQuat;
+        }
+        else
+        {
+            // 캘리브레이션 전: 센서 값을 그대로 사용 (초기 자세 확인용)
+            // handRoot의 초기 회전 값을 유지한 채로 센서 값을 더함
+            finalQuat = handRoot.rotation * sensorQuat;
+        }
+        
+        handRoot.rotation = Quaternion.Slerp(handRoot.rotation, finalQuat, rotationSmoothing);
 
-        // 2. 손가락 굽힘 업데이트
+        // 손가락 관절 업데이트
         for (int i = 0; i < fingerJoints.Length; i++)
         {
-            if (fingerJoints[i] != null && i < flexMin.Length && i < flexMax.Length && i < fingerRotationAxes.Length)
+            if (fingerJoints[i] != null && i < flexMin.Length && i < flexMax.Length)
             {
-                float bendNormalized = Mathf.InverseLerp(flexMin[i], flexMax[i], flexVals[i]);
-                float finalAngle = Mathf.Lerp(0, maxFingerAngle, bendNormalized);
+                float bendAmount = Mathf.InverseLerp(flexMin[i], flexMax[i], flexVals[i]);
+                float targetAngle = bendAmount * maxFingerAngle;
+                Quaternion initialRotation;
 
-                // 각 손가락의 회전 축을 변수로 사용 (모두 Z축으로 통일)
-                // 손가락 굽힘을 Z축으로만 적용
-                fingerJoints[i].localRotation = Quaternion.Euler(0f, 0f, finalAngle);
+                switch (i)
+                {
+                    case 0: // 엄지
+                        initialRotation = Quaternion.Euler(-0.539f, -0.005f, 17.365f);
+                        fingerJoints[i].localRotation = initialRotation * Quaternion.Euler(0f, 0f, targetAngle);
+                        break;
+                    case 1: // 검지
+                        initialRotation = Quaternion.Euler(14.478f, 85.578f, 11.701f);
+                        fingerJoints[i].localRotation = initialRotation * Quaternion.Euler(0f, 0f, targetAngle);
+                        break;
+                    case 2: // 중지
+                        initialRotation = Quaternion.Euler(3.078f, 99.098f, 9.556f);
+                        fingerJoints[i].localRotation = initialRotation * Quaternion.Euler(0f, 0f, targetAngle);
+                        break;
+                    case 3: // 약지
+                        initialRotation = Quaternion.Euler(-7.489f, 109.398f, 6.735f);
+                        fingerJoints[i].localRotation = initialRotation * Quaternion.Euler(0f, 0f, targetAngle);
+                        break;
+                    case 4: // 소지
+                        initialRotation = Quaternion.Euler(-15.24f, 123.18f, 9.379f);
+                        fingerJoints[i].localRotation = initialRotation * Quaternion.Euler(0f, 0f, targetAngle);
+                        break;
+                }
             }
         }
     }
-
+    
     void OnApplicationQuit()
     {
         isRunning = false;

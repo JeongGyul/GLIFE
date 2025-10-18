@@ -23,6 +23,13 @@ public class HandControllerR : MonoBehaviour
     [Tooltip("손가락이 최대로 굽혀질 각도")]
     public float maxFingerAngle = 90.0f;
 
+    [Header("자이로 캘리브레이션")]
+    [Tooltip("C 키를 눌러 현재 자세를 중립으로 설정")]
+    public KeyCode calibrationKey = KeyCode.C;
+    [Tooltip("자이로 드리프트 보정을 위한 스무딩 강도 (0~1)")]
+    [Range(0f, 1f)]
+    public float gyroSmoothing = 0.1f;
+
     // --- 내부 변수들 ---
     private SerialPort serialPort;
     private Thread dataReadThread;
@@ -32,6 +39,17 @@ public class HandControllerR : MonoBehaviour
 
     private int[] flexVals = new int[5];
     private float pitch = 0, roll = 0, yaw = 0;
+    
+    // 자이로 캘리브레이션 관련
+    private float pitchOffset = 0f;
+    private float rollOffset = 0f;
+    private float yawOffset = 0f;
+    private bool isCalibrated = false;
+    
+    // 스무딩을 위한 이전 값 저장
+    private float smoothedPitch = 0f;
+    private float smoothedRoll = 0f;
+    private float smoothedYaw = 0f;
 
     void Start()
     {
@@ -44,6 +62,7 @@ public class HandControllerR : MonoBehaviour
             dataReadThread.IsBackground = true;
             dataReadThread.Start();
             Debug.Log($"✅ [오른손] Bluetooth-Serial 포트 연결 성공: {portName}");
+            Debug.Log($"💡 [{calibrationKey}] 키를 눌러 자이로 센서를 캘리브레이션하세요.");
         }
         catch (Exception e)
         {
@@ -53,6 +72,12 @@ public class HandControllerR : MonoBehaviour
 
     void Update()
     {
+        // 캘리브레이션 키 입력 확인
+        if (Input.GetKeyDown(calibrationKey))
+        {
+            CalibrateGyro();
+        }
+
         string dataToProcess = null;
         lock (lockObject)
         {
@@ -119,18 +144,45 @@ public class HandControllerR : MonoBehaviour
         }
     }
 
+    private void CalibrateGyro()
+    {
+        pitchOffset = pitch;
+        rollOffset = roll;
+        yawOffset = yaw;
+        isCalibrated = true;
+        
+        // 스무딩 값도 초기화
+        smoothedPitch = 0f;
+        smoothedRoll = 0f;
+        smoothedYaw = 0f;
+        
+        Debug.Log("✅ [오른손] 자이로 캘리브레이션 완료!");
+        Debug.Log($"📊 Offset - Pitch: {pitchOffset:F2}, Roll: {rollOffset:F2}, Yaw: {yawOffset:F2}");
+    }
+
     private void UpdateHandModel()
     {
         if (handRoot != null)
         {
-            // 오른손 모델에 맞게 손목의 기본 회전값을 변경했습니다.
-            float finalWristX = 57.645f - pitch;
-            float finalWristY = -135.26f - yaw;
-            float finalWristZ = 69.727f + roll; 
+            // 오프셋 적용
+            float adjustedPitch = isCalibrated ? pitch - pitchOffset : pitch;
+            float adjustedRoll = isCalibrated ? roll - rollOffset : roll;
+            float adjustedYaw = isCalibrated ? yaw - yawOffset : yaw;
+            
+            // 스무딩 적용 (드리프트 감소)
+            smoothedPitch = Mathf.Lerp(smoothedPitch, adjustedPitch, gyroSmoothing);
+            smoothedRoll = Mathf.Lerp(smoothedRoll, adjustedRoll, gyroSmoothing);
+            smoothedYaw = Mathf.Lerp(smoothedYaw, adjustedYaw, gyroSmoothing);
+            
+            // 최종 회전값 계산
+            float finalWristX = 57.645f - smoothedPitch;
+            float finalWristY = -135.26f - smoothedYaw;
+            float finalWristZ = 69.727f + smoothedRoll;
 
             handRoot.localRotation = Quaternion.Euler(finalWristX, finalWristY, finalWristZ);
         }
 
+        // 손가락 관절 업데이트
         for (int i = 0; i < fingerJoints.Length; i++)
         {
             if (fingerJoints[i] != null && i < flexMin.Length && i < flexMax.Length)
@@ -143,7 +195,6 @@ public class HandControllerR : MonoBehaviour
                 switch (i)
                 {
                     case 0: // 엄지 (ThumbB_R)
-                        // 오른손 모델에 맞게 Y축 부호만 반전했습니다.
                         initialRotation = Quaternion.Euler(-0.539f, 0.005f, -17.365f);
                         fingerJoints[i].localRotation = initialRotation * Quaternion.Euler(0f, 0f, -targetAngle);
                         break;
@@ -173,5 +224,20 @@ public class HandControllerR : MonoBehaviour
         isRunning = false;
         if (dataReadThread != null && dataReadThread.IsAlive) dataReadThread.Join();
         if (serialPort != null && serialPort.IsOpen) serialPort.Close();
+    }
+
+    // 디버깅용: 현재 자이로 값 표시
+    void OnGUI()
+    {
+        if (!isRunning) return;
+        
+        GUILayout.BeginArea(new Rect(10, 10, 300, 150));
+        GUILayout.Label($"[오른손 자이로 데이터]");
+        GUILayout.Label($"Pitch: {pitch:F2} (조정: {(isCalibrated ? pitch - pitchOffset : pitch):F2})");
+        GUILayout.Label($"Roll: {roll:F2} (조정: {(isCalibrated ? roll - rollOffset : roll):F2})");
+        GUILayout.Label($"Yaw: {yaw:F2} (조정: {(isCalibrated ? yaw - yawOffset : yaw):F2})");
+        GUILayout.Label($"캘리브레이션: {(isCalibrated ? "✅ 완료" : "❌ 필요")}");
+        GUILayout.Label($"[{calibrationKey}] 키로 캘리브레이션");
+        GUILayout.EndArea();
     }
 }
